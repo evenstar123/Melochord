@@ -79,7 +79,8 @@ if [ -d "melochord" ]; then
     cd melochord
     git pull
 else
-    git clone https://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@github.com/evenstar123/Molochrod.git melochord
+    # 需要手动输入 GitHub 凭据，或使用 SSH key
+    git clone https://github.com/evenstar123/Molochrod.git melochord
     cd melochord
 fi
 
@@ -91,12 +92,14 @@ npm install
 # --- 7. Create .env.local ---
 echo ""
 echo "[7/7] Creating .env.local..."
-cat > .env.local << EOF
-DASHSCOPE_API_KEY=sk-221fe4de72c64e4ab60195769cd102ca
-AUDIVERIS_PATH=${AUDIVERIS_PATH}
-PORT=4000
-EOF
-echo ".env.local created"
+if [ ! -f .env.local ]; then
+    echo "请手动创建 .env.local 文件并填入 API 密钥："
+    echo "  DASHSCOPE_API_KEY=<your-key>"
+    echo "  AUDIVERIS_PATH=${AUDIVERIS_PATH}"
+    echo "  PORT=4000"
+else
+    echo ".env.local already exists, skipping"
+fi
 
 # --- 8. Install pm2 ---
 echo ""
