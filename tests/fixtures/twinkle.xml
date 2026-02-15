@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <work>
+    <work-title>小星星</work-title>
+  </work>
+  <identification>
+    <creator type="composer">莫扎特</creator>
+  </identification>
+  <part-list>
+    <score-part id="P1">
+      <part-name>Piano</part-name>
+    </score-part>
+  </part-list>
+  <part id="P1">
+    <!-- 第1小节: C C G G -->
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <key>
+          <fifths>0</fifths>
+          <mode>major</mode>
+        </key>
+        <time>
+          <beats>4</beats>
+          <beat-type>4</beat-type>
+        </time>
+      </attributes>
+      <direction>
+        <sound tempo="120"/>
+      </direction>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+    </measure>
+    <!-- 第2小节: A A G- -->
+    <measure number="2">
+      <note>
+        <pitch><step>A</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>A</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>2</duration>
+        <type>half</type>
+      </note>
+    </measure>
+    <!-- 第3小节: F F E E -->
+    <measure number="3">
+      <note>
+        <pitch><step>F</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>F</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+    </measure>
+    <!-- 第4小节: D D C- -->
+    <measure number="4">
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>2</duration>
+        <type>half</type>
+      </note>
+    </measure>
+  </part>
+</score-partwise>

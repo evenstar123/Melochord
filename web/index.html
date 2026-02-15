@@ -1,0 +1,2766 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Harmony Engine — 和声分析引擎</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ===== Reset & Base ===== */
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Noto Serif SC', 'Source Han Serif SC', 'SimSun', 'Songti SC', serif;
+      background-color: #f5f0e8;
+      color: #3e2723;
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ===== Color Variables ===== */
+    :root {
+      --bg: #f5f0e8;
+      --bg-card: #faf7f2;
+      --text: #3e2723;
+      --text-muted: #6d4c41;
+      --accent: #8d6e63;
+      --accent-light: #a1887f;
+      --accent-dark: #5d4037;
+      --border: #c8b8a8;
+      --border-light: #d7ccc8;
+      --shadow: rgba(62, 39, 35, 0.08);
+      --shadow-hover: rgba(62, 39, 35, 0.14);
+      --gold: #c8a96e;
+      --error: #b71c1c;
+      --success: #558b2f;
+      --chord-color: #c0392b;
+    }
+
+    /* ===== Decorative Divider ===== */
+    .music-divider {
+      text-align: center;
+      color: var(--accent-light);
+      font-size: 1.1rem;
+      letter-spacing: 0.6em;
+      user-select: none;
+      padding: 6px 0;
+    }
+
+    .music-divider::before,
+    .music-divider::after {
+      content: '';
+      display: inline-block;
+      width: 60px;
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--border), transparent);
+      vertical-align: middle;
+      margin: 0 12px;
+    }
+
+    /* ===== Header ===== */
+    .app-header {
+      text-align: center;
+      padding: 32px 24px 12px;
+    }
+
+    .app-header h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.08em;
+    }
+
+    .app-header h1 .icon {
+      font-size: 1.4rem;
+      margin-right: 6px;
+    }
+
+    .app-header .subtitle {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+      font-weight: 400;
+    }
+
+    /* ===== Main Container ===== */
+    .main-container {
+      max-width: 980px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 0 24px;
+      flex: 1;
+    }
+
+    /* ===== Control Bar ===== */
+    .control-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 14px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      box-shadow: 0 1px 4px var(--shadow);
+      margin-bottom: 16px;
+    }
+
+    .control-bar .separator {
+      width: 1px;
+      height: 28px;
+      background: var(--border-light);
+      flex-shrink: 0;
+    }
+
+    .control-bar .spacer {
+      flex: 1;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 7px 16px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      border-color: var(--accent);
+      color: var(--accent-dark);
+      box-shadow: 0 1px 3px var(--shadow);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-dark);
+      border-color: var(--accent-dark);
+      color: #fff;
+    }
+
+    /* File input hidden */
+    .file-input-hidden {
+      display: none;
+    }
+
+    /* Difficulty buttons group */
+    .btn-group {
+      display: inline-flex;
+      gap: 0;
+    }
+
+    .btn-group .btn {
+      border-radius: 0;
+      margin-left: -1px;
+    }
+
+    .btn-group .btn:first-child {
+      border-radius: 5px 0 0 5px;
+      margin-left: 0;
+    }
+
+    .btn-group .btn:last-child {
+      border-radius: 0 5px 5px 0;
+    }
+
+    .btn-group .btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+      z-index: 1;
+      position: relative;
+    }
+
+    .btn-group-label {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-right: 2px;
+    }
+
+    /* ===== Score Card ===== */
+    .score-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 2px 8px var(--shadow);
+      padding: 28px 24px;
+      min-height: 240px;
+      position: relative;
+      margin-bottom: 16px;
+      /* Paper texture feel */
+      background-image:
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.4) 0%, transparent 2%),
+        linear-gradient(to top, rgba(0, 0, 0, 0.01) 0%, transparent 4%);
+    }
+
+    .score-card .placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+      color: var(--accent-light);
+      text-align: center;
+    }
+
+    .score-card .placeholder .icon {
+      font-size: 2.8rem;
+      margin-bottom: 12px;
+      opacity: 0.6;
+    }
+
+    .score-card .placeholder p {
+      font-size: 0.95rem;
+    }
+
+    .score-card.hidden {
+      display: none;
+    }
+
+    #staffContainer,
+    #jianpuContainer {
+      width: 100%;
+    }
+
+    #jianpuContainer canvas {
+      display: block;
+      margin: 0 auto;
+    }
+
+    /* ===== Analysis Panel ===== */
+    .analysis-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      box-shadow: 0 1px 4px var(--shadow);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+      display: none;
+      /* shown after analysis */
+    }
+
+    .analysis-panel.visible {
+      display: block;
+    }
+
+    .analysis-panel h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--accent-dark);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .analysis-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .analysis-item {
+      padding: 12px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border-light);
+      border-radius: 6px;
+    }
+
+    .analysis-item .label {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .analysis-item .value {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .analysis-item .value.chord-list {
+      font-size: 0.9rem;
+      font-weight: 400;
+      word-break: break-word;
+    }
+
+    /* ===== Error Display ===== */
+    .error-banner {
+      background: #fbe9e7;
+      border: 1px solid #ef9a9a;
+      border-radius: 6px;
+      padding: 12px 18px;
+      color: var(--error);
+      font-size: 0.9rem;
+      margin-bottom: 16px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .error-banner.visible {
+      display: flex;
+    }
+
+    .error-banner .close-btn {
+      margin-left: auto;
+      background: none;
+      border: none;
+      color: var(--error);
+      cursor: pointer;
+      font-size: 1.1rem;
+      padding: 0 4px;
+    }
+
+    /* ===== Loading Overlay ===== */
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(245, 240, 232, 0.88);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .loading-overlay.visible {
+      display: flex;
+    }
+
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid var(--border-light);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .loading-overlay .loading-text {
+      font-size: 1rem;
+      color: var(--text-muted);
+    }
+
+    /* ===== ABC Export Modal ===== */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(62, 39, 35, 0.35);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+
+    .modal-backdrop.visible {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 8px 32px rgba(62, 39, 35, 0.2);
+      padding: 24px;
+      width: 90%;
+      max-width: 640px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--accent-dark);
+    }
+
+    .modal textarea {
+      width: 100%;
+      min-height: 200px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.88rem;
+      background: var(--bg);
+      color: var(--text);
+      resize: vertical;
+      flex: 1;
+    }
+
+    .modal .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 14px;
+    }
+
+    /* ===== Status Bar ===== */
+    .status-bar {
+      max-width: 980px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 8px 24px 20px;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-bar .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-light);
+      flex-shrink: 0;
+    }
+
+    .status-bar .dot.success {
+      background: var(--success);
+    }
+
+    .status-bar .dot.error {
+      background: var(--error);
+    }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 640px) {
+      .app-header h1 {
+        font-size: 1.4rem;
+      }
+
+      .control-bar {
+        gap: 8px;
+        padding: 10px 14px;
+      }
+
+      .score-card {
+        padding: 16px 12px;
+      }
+
+      .analysis-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .page-nav {
+        flex-wrap: wrap;
+      }
+    }
+
+    /* ===== Pagination Bar ===== */
+    .page-nav {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      box-shadow: 0 1px 4px var(--shadow);
+      margin-bottom: 16px;
+    }
+
+    .page-nav.visible {
+      display: flex;
+    }
+
+    .page-nav .page-info {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      min-width: 80px;
+      text-align: center;
+    }
+
+    .page-nav .page-info .current-page {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .page-nav .page-dots {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    .page-nav .page-dot {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .page-nav .page-dot:hover {
+      border-color: var(--accent);
+      color: var(--accent-dark);
+    }
+
+    .page-nav .page-dot.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .page-nav .page-scope-toggle {
+      margin-left: auto;
+      display: flex;
+      gap: 0;
+    }
+
+    .page-nav .page-scope-toggle .btn {
+      font-size: 0.82rem;
+      padding: 5px 12px;
+    }
+
+    /* ===== Page Sort Modal ===== */
+    .page-sort-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(62, 39, 35, 0.35);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+
+    .page-sort-backdrop.visible {
+      display: flex;
+    }
+
+    .page-sort-modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 8px 32px rgba(62, 39, 35, 0.2);
+      padding: 24px;
+      width: 90%;
+      max-width: 560px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .page-sort-modal h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--accent-dark);
+    }
+
+    .page-sort-modal .hint {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+
+    .page-sort-list {
+      list-style: none;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 80px;
+      max-height: 50vh;
+      border: 1px solid var(--border-light);
+      border-radius: 6px;
+      background: var(--bg);
+      padding: 4px;
+    }
+
+    .page-sort-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      margin: 4px 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: 6px;
+      cursor: grab;
+      user-select: none;
+      transition: box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+
+    .page-sort-item:active {
+      cursor: grabbing;
+    }
+
+    .page-sort-item.dragging {
+      opacity: 0.5;
+      border-color: var(--accent);
+      box-shadow: 0 2px 8px var(--shadow-hover);
+    }
+
+    .page-sort-item.drag-over {
+      border-color: var(--accent);
+      border-style: dashed;
+    }
+
+    .page-sort-item .page-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.82rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .page-sort-item .page-name {
+      font-size: 0.9rem;
+      color: var(--text);
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .page-sort-item .page-size {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .page-sort-item .drag-handle {
+      color: var(--accent-light);
+      font-size: 1.1rem;
+      cursor: grab;
+      flex-shrink: 0;
+    }
+
+    .page-sort-item .page-remove {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0 4px;
+      flex-shrink: 0;
+    }
+
+    .page-sort-item .page-remove:hover {
+      color: var(--error);
+    }
+
+    .page-sort-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 14px;
+    }
+
+    /* ===== Export Dropdown ===== */
+    .export-dropdown {
+      position: relative;
+      display: inline-block;
+    }
+
+    .export-dropdown-menu {
+      display: none;
+      position: absolute;
+      bottom: 100%;
+      right: 0;
+      margin-bottom: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 4px 16px var(--shadow-hover);
+      min-width: 160px;
+      z-index: 100;
+      overflow: hidden;
+    }
+
+    .export-dropdown-menu.open {
+      display: block;
+    }
+
+    .export-dropdown-menu button {
+      display: block;
+      width: 100%;
+      padding: 9px 14px;
+      border: none;
+      background: none;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.85rem;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .export-dropdown-menu button:hover {
+      background: var(--bg);
+    }
+
+    .export-dropdown-menu button+button {
+      border-top: 1px solid var(--border-light);
+    }
+
+    /* Hidden offscreen render container for batch export */
+    #offscreenRender {
+      position: fixed;
+      left: -9999px;
+      top: 0;
+      width: 980px;
+      visibility: hidden;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ===== Header ===== -->
+  <header class="app-header">
+    <h1><span class="icon">𝄞</span>Harmony Engine</h1>
+    <p class="subtitle">自动和声分析引擎 · 领谱生成与可视化</p>
+  </header>
+
+  <div class="music-divider">♪ ♫ ♩ ♬ ♪</div>
+
+  <div class="main-container">
+
+    <!-- ===== Control Bar ===== -->
+    <div class="control-bar">
+      <input type="file" id="fileInput" class="file-input-hidden"
+        accept=".xml,.musicxml,.png,.jpg,.jpeg,.bmp,.tiff,.tif,.pdf" multiple>
+      <button class="btn" id="btnUpload">📂 上传乐谱</button>
+      <button class="btn" id="btnLoadDemo">📄 加载示例</button>
+
+      <div class="separator"></div>
+
+      <span class="btn-group-label">难度：</span>
+      <div class="btn-group" id="difficultyGroup">
+        <button class="btn" data-difficulty="basic">基础</button>
+        <button class="btn active" data-difficulty="intermediate">中级</button>
+        <button class="btn" data-difficulty="advanced">高级</button>
+      </div>
+
+      <div class="separator"></div>
+
+      <div class="btn-group" id="viewToggle">
+        <button class="btn active" data-view="staff">五线谱</button>
+        <button class="btn" data-view="jianpu">简谱</button>
+      </div>
+
+      <div class="spacer"></div>
+
+      <button class="btn btn-primary" id="btnExportABC">导出 ABC</button>
+      <div class="export-dropdown" id="dropdownPNG">
+        <button class="btn btn-primary" id="btnExportPNG">导出 PNG ▾</button>
+        <div class="export-dropdown-menu" id="menuPNG">
+          <button data-action="current">导出当前页</button>
+          <button data-action="all">导出全部页面</button>
+        </div>
+      </div>
+      <div class="export-dropdown" id="dropdownPDF">
+        <button class="btn btn-primary" id="btnExportPDF">导出 PDF ▾</button>
+        <div class="export-dropdown-menu" id="menuPDF">
+          <button data-action="current">导出当前页</button>
+          <button data-action="all">导出全部页面</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Pagination Bar ===== -->
+    <div class="page-nav" id="pageNav">
+      <button class="btn" id="btnPrevPage" disabled>◀ 上一页</button>
+      <div class="page-dots" id="pageDots"></div>
+      <span class="page-info"><span class="current-page" id="pageCurrentLabel">1</span> / <span
+          id="pageTotalLabel">1</span></span>
+      <button class="btn" id="btnNextPage" disabled>下一页 ▶</button>
+      <div class="page-scope-toggle btn-group" id="pageScopeToggle">
+        <button class="btn active" data-scope="page">当前页</button>
+        <button class="btn" data-scope="all">全部</button>
+      </div>
+    </div>
+
+    <!-- ===== Error Banner ===== -->
+    <div class="error-banner" id="errorBanner">
+      <span id="errorText"></span>
+      <button class="close-btn" id="errorClose">&times;</button>
+    </div>
+
+    <!-- ===== Score Area ===== -->
+    <div class="score-card" id="staffCard">
+      <div id="staffContainer">
+        <div class="placeholder">
+          <div class="icon">𝄞</div>
+          <p>请上传乐谱图片（PNG/JPG/PDF）或 MusicXML 文件，支持多页上传<br>或点击「加载示例」查看效果</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="score-card hidden" id="jianpuCard">
+      <div id="jianpuContainer">
+        <canvas id="jianpuCanvas"></canvas>
+      </div>
+    </div>
+
+    <div class="music-divider">♩ ♪ ♫</div>
+
+    <!-- ===== Analysis Panel ===== -->
+    <div class="analysis-panel" id="analysisPanel">
+      <h3>📊 分析结果</h3>
+      <div class="analysis-grid">
+        <div class="analysis-item">
+          <div class="label">调性</div>
+          <div class="value" id="analysisKey">—</div>
+        </div>
+        <div class="analysis-item">
+          <div class="label">置信度</div>
+          <div class="value" id="analysisConfidence">—</div>
+        </div>
+        <div class="analysis-item">
+          <div class="label">小节数</div>
+          <div class="value" id="analysisMeasures">—</div>
+        </div>
+        <div class="analysis-item">
+          <div class="label">API 调用</div>
+          <div class="value" id="analysisAPICalls">—</div>
+        </div>
+        <div class="analysis-item">
+          <div class="label">处理耗时</div>
+          <div class="value" id="analysisDuration">—</div>
+        </div>
+        <div class="analysis-item" style="grid-column: 1 / -1;">
+          <div class="label">和弦进行</div>
+          <div class="value chord-list" id="analysisChords">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Devtools: Testing Sections ===== -->
+    <div class="music-divider" style="margin-top: 28px;">🔧 开发测试工具 🔧</div>
+
+    <!-- OMR Accuracy Test -->
+    <div class="card" id="omrTestCard">
+      <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;"
+        id="omrTestToggle">
+        <h3 style="margin:0;font-size:1.05rem;">🔍 OMR 识别准确性测试</h3>
+        <span class="toggle-icon" style="font-size:0.9rem;color:var(--text-muted)">▼</span>
+      </div>
+      <div class="card-body" id="omrTestBody" style="display:none;padding-top:12px;">
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:10px;">
+          上传乐谱图片/PDF，仅运行 OMR 识别（不进行和声分析），查看原始识别结果。
+        </p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+          <input type="file" id="omrTestFileInput" class="file-input-hidden"
+            accept=".png,.jpg,.jpeg,.bmp,.tiff,.tif,.pdf">
+          <button class="btn" id="btnOmrTestUpload">📤 上传测试文件</button>
+          <span id="omrTestStatus" style="font-size:0.82rem;color:var(--text-muted);align-self:center;"></span>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:8px;">
+          <button class="btn" id="btnOmrTestDownload" disabled>⬇ 下载 MusicXML</button>
+          <button class="btn" id="btnOmrTestRender" disabled>🎵 渲染预览</button>
+        </div>
+        <div id="omrTestInfo" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;"></div>
+        <textarea id="omrTestOutput" readonly
+          style="width:100%;height:200px;font-family:monospace;font-size:0.78rem;background:var(--bg);border:1px solid var(--border-light);border-radius:6px;padding:10px;display:none;resize:vertical;"></textarea>
+        <div id="omrTestRenderContainer" style="margin-top:10px;min-height:80px;"></div>
+      </div>
+    </div>
+
+    <!-- MusicXML Render & Export Test -->
+    <div class="card" id="xmlTestCard">
+      <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;"
+        id="xmlTestToggle">
+        <h3 style="margin:0;font-size:1.05rem;">🎼 MusicXML 渲染 & 导出测试</h3>
+        <span class="toggle-icon" style="font-size:0.9rem;color:var(--text-muted)">▼</span>
+      </div>
+      <div class="card-body" id="xmlTestBody" style="display:none;padding-top:12px;">
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:10px;">
+          粘贴或上传 MusicXML 文件，直接测试 OSMD 渲染准确性和 PNG/PDF 导出功能。
+        </p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+          <input type="file" id="xmlTestFileInput" class="file-input-hidden" accept=".xml,.musicxml,.mxl">
+          <button class="btn" id="btnXmlTestUpload">📤 上传 MusicXML</button>
+          <button class="btn" id="btnXmlTestPaste">📋 从缓存加载</button>
+          <button class="btn" id="btnXmlTestRender" disabled>🎵 渲染</button>
+          <button class="btn" id="btnXmlTestExportPNG" disabled>📸 导出 PNG</button>
+          <button class="btn" id="btnXmlTestExportPDF" disabled>📄 导出 PDF</button>
+        </div>
+        <div id="xmlTestStatus" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:8px;"></div>
+        <textarea id="xmlTestInput" placeholder="在此粘贴 MusicXML 内容…"
+          style="width:100%;height:160px;font-family:monospace;font-size:0.78rem;background:var(--bg);border:1px solid var(--border-light);border-radius:6px;padding:10px;resize:vertical;margin-bottom:10px;"></textarea>
+        <div id="xmlTestRenderContainer"
+          style="min-height:80px;background:var(--bg-card);border:1px solid var(--border-light);border-radius:6px;padding:10px;">
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.main-container -->
+
+  <!-- ===== Status Bar ===== -->
+  <div class="status-bar">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">就绪</span>
+  </div>
+
+  <!-- ===== Loading Overlay ===== -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">正在分析中…</div>
+  </div>
+
+  <!-- ===== ABC Export Modal ===== -->
+  <div class="modal-backdrop" id="abcModal">
+    <div class="modal">
+      <h3>ABC Notation 导出</h3>
+      <textarea id="abcOutput" readonly></textarea>
+      <div class="modal-actions">
+        <button class="btn" id="btnCopyABC">📋 复制到剪贴板</button>
+        <button class="btn" id="btnCloseModal">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Page Sort Modal ===== -->
+  <div class="page-sort-backdrop" id="pageSortBackdrop">
+    <div class="page-sort-modal">
+      <h3>📄 调整页面顺序</h3>
+      <p class="hint">拖拽调整页面先后顺序，点击 ✕ 移除不需要的页面</p>
+      <ul class="page-sort-list" id="pageSortList"></ul>
+      <div class="page-sort-actions">
+        <button class="btn" id="btnSortCancel">取消</button>
+        <button class="btn btn-primary" id="btnSortConfirm">确认上传</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden container for batch rendering (must be before the script block) -->
+  <div id="offscreenRender"></div>
+
+  <!-- ===== OSMD CDN ===== -->
+  <script src="https://cdn.jsdelivr.net/npm/opensheetmusicdisplay@1.8.6/build/opensheetmusicdisplay.min.js"></script>
+  <!-- ===== Client-side export: html2canvas + jsPDF ===== -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+
+  <!-- ===== App JS (stubs — full logic in tasks 6.2-6.7) ===== -->
+  <script>
+    // Global state (to be populated by subsequent tasks)
+    const state = {
+      currentXML: null,
+      currentScore: null,
+      currentView: 'staff',
+      difficulty: 'intermediate',
+      isLoading: false,
+      // Multi-page state
+      pages: [],          // Array of { musicxml, score, analysis } per page
+      pageRanges: [],     // Array of { pageIndex, startMeasure, endMeasure }
+      currentPage: 0,     // 0-based current page index
+      totalPages: 0,
+      viewScope: 'page',  // 'page' or 'all'
+      mergedXML: null,    // Full merged MusicXML
+      mergedScore: null,  // Full merged Score
+      pendingFiles: [],   // Files awaiting sort confirmation
+    };
+
+    // DOM references
+    const dom = {
+      fileInput: document.getElementById('fileInput'),
+      btnUpload: document.getElementById('btnUpload'),
+      btnLoadDemo: document.getElementById('btnLoadDemo'),
+      difficultyGroup: document.getElementById('difficultyGroup'),
+      viewToggle: document.getElementById('viewToggle'),
+      btnExportABC: document.getElementById('btnExportABC'),
+      btnExportPNG: document.getElementById('btnExportPNG'),
+      btnExportPDF: document.getElementById('btnExportPDF'),
+      staffCard: document.getElementById('staffCard'),
+      jianpuCard: document.getElementById('jianpuCard'),
+      staffContainer: document.getElementById('staffContainer'),
+      jianpuContainer: document.getElementById('jianpuContainer'),
+      jianpuCanvas: document.getElementById('jianpuCanvas'),
+      analysisPanel: document.getElementById('analysisPanel'),
+      analysisKey: document.getElementById('analysisKey'),
+      analysisConfidence: document.getElementById('analysisConfidence'),
+      analysisMeasures: document.getElementById('analysisMeasures'),
+      analysisAPICalls: document.getElementById('analysisAPICalls'),
+      analysisDuration: document.getElementById('analysisDuration'),
+      analysisChords: document.getElementById('analysisChords'),
+      errorBanner: document.getElementById('errorBanner'),
+      errorText: document.getElementById('errorText'),
+      errorClose: document.getElementById('errorClose'),
+      loadingOverlay: document.getElementById('loadingOverlay'),
+      statusDot: document.getElementById('statusDot'),
+      statusText: document.getElementById('statusText'),
+      abcModal: document.getElementById('abcModal'),
+      abcOutput: document.getElementById('abcOutput'),
+      btnCopyABC: document.getElementById('btnCopyABC'),
+      btnCloseModal: document.getElementById('btnCloseModal'),
+      // Pagination
+      pageNav: document.getElementById('pageNav'),
+      btnPrevPage: document.getElementById('btnPrevPage'),
+      btnNextPage: document.getElementById('btnNextPage'),
+      pageDots: document.getElementById('pageDots'),
+      pageCurrentLabel: document.getElementById('pageCurrentLabel'),
+      pageTotalLabel: document.getElementById('pageTotalLabel'),
+      pageScopeToggle: document.getElementById('pageScopeToggle'),
+      // Page sort modal
+      pageSortBackdrop: document.getElementById('pageSortBackdrop'),
+      pageSortList: document.getElementById('pageSortList'),
+      btnSortCancel: document.getElementById('btnSortCancel'),
+      btnSortConfirm: document.getElementById('btnSortConfirm'),
+      // Export dropdowns
+      dropdownPNG: document.getElementById('dropdownPNG'),
+      menuPNG: document.getElementById('menuPNG'),
+      dropdownPDF: document.getElementById('dropdownPDF'),
+      menuPDF: document.getElementById('menuPDF'),
+      offscreenRender: document.getElementById('offscreenRender'),
+    };
+
+    // --- Stub: Upload button triggers file input ---
+    dom.btnUpload.addEventListener('click', () => dom.fileInput.click());
+
+    // --- Stub: Error banner close ---
+    dom.errorClose.addEventListener('click', () => {
+      dom.errorBanner.classList.remove('visible');
+    });
+
+    // --- Difficulty selection ---
+    dom.difficultyGroup.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-difficulty]');
+      if (!btn) return;
+      dom.difficultyGroup.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.difficulty = btn.dataset.difficulty;
+      // Auto re-analyze when MusicXML data is already loaded
+      if (state.currentXML && !state.isLoading) {
+        requestHarmonize(state.currentXML, state.difficulty);
+      }
+    });
+
+    // --- Stub: View toggle ---
+    dom.viewToggle.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-view]');
+      if (!btn) return;
+      dom.viewToggle.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.currentView = btn.dataset.view;
+      dom.staffCard.classList.toggle('hidden', state.currentView !== 'staff');
+      dom.jianpuCard.classList.toggle('hidden', state.currentView !== 'jianpu');
+      // Re-render the newly visible view if data exists
+      renderCurrentView();
+    });
+
+    // --- Stub: Modal close ---
+    dom.btnCloseModal.addEventListener('click', () => {
+      dom.abcModal.classList.remove('visible');
+    });
+
+    // --- Pagination Controls ---
+    function updatePaginationUI() {
+      if (state.totalPages <= 1) {
+        dom.pageNav.classList.remove('visible');
+        return;
+      }
+      dom.pageNav.classList.add('visible');
+      dom.pageCurrentLabel.textContent = String(state.currentPage + 1);
+      dom.pageTotalLabel.textContent = String(state.totalPages);
+      dom.btnPrevPage.disabled = state.currentPage <= 0;
+      dom.btnNextPage.disabled = state.currentPage >= state.totalPages - 1;
+
+      // Render page dots
+      dom.pageDots.innerHTML = '';
+      for (let i = 0; i < state.totalPages; i++) {
+        const dot = document.createElement('button');
+        dot.className = 'page-dot' + (i === state.currentPage ? ' active' : '');
+        dot.textContent = String(i + 1);
+        dot.setAttribute('aria-label', `第 ${i + 1} 页`);
+        dot.addEventListener('click', () => goToPage(i));
+        dom.pageDots.appendChild(dot);
+      }
+    }
+
+    function goToPage(pageIndex) {
+      if (pageIndex < 0 || pageIndex >= state.totalPages) return;
+      state.currentPage = pageIndex;
+      updatePaginationUI();
+      renderCurrentView();
+    }
+
+    // ===== Cache analysis results to localStorage for debugging =====
+    function cacheAnalysisResult(xml, score, analysis) {
+      try {
+        if (xml) localStorage.setItem('harmony_cached_xml', xml);
+        if (score) localStorage.setItem('harmony_cached_score', JSON.stringify(score));
+        if (analysis) localStorage.setItem('harmony_cached_analysis', JSON.stringify(analysis));
+        localStorage.setItem('harmony_cached_at', new Date().toISOString());
+        console.log('[Cache] Analysis results saved to localStorage at', new Date().toLocaleTimeString());
+      } catch (e) {
+        console.warn('[Cache] Failed to save to localStorage:', e);
+      }
+    }
+
+    // Download the cached MusicXML as a file (call from console: downloadCachedXML())
+    window.downloadCachedXML = function () {
+      const xml = localStorage.getItem('harmony_cached_xml');
+      if (!xml) { console.warn('No cached XML found'); return; }
+      const blob = new Blob([xml], { type: 'application/xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'cached_score_' + (localStorage.getItem('harmony_cached_at') || 'unknown').replace(/[:.]/g, '-') + '.xml';
+      a.click();
+      URL.revokeObjectURL(url);
+      console.log('Downloaded cached XML');
+    };
+
+    function renderCurrentView() {
+      // Determine which data to render based on scope
+      let xml, score;
+      if (state.viewScope === 'all' || state.totalPages <= 1) {
+        xml = state.currentMusicXML || state.currentXML;
+        score = state.currentScore;
+      } else {
+        // Per-page view: use page-specific slices
+        const page = state.pages[state.currentPage];
+        if (page) {
+          xml = page.musicxml || state.currentMusicXML || state.currentXML;
+          score = page.score || state.currentScore;
+        } else {
+          xml = state.currentMusicXML || state.currentXML;
+          score = state.currentScore;
+        }
+      }
+
+      // Cache the data before rendering so it survives render failures
+      cacheAnalysisResult(xml, score, state.analysis);
+
+      if (state.currentView === 'staff' && xml) {
+        renderStaffView(xml);
+      } else if (state.currentView === 'jianpu' && score) {
+        renderJianpuView(score);
+      }
+    }
+
+    dom.btnPrevPage.addEventListener('click', () => goToPage(state.currentPage - 1));
+    dom.btnNextPage.addEventListener('click', () => goToPage(state.currentPage + 1));
+
+    dom.pageScopeToggle.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-scope]');
+      if (!btn) return;
+      dom.pageScopeToggle.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.viewScope = btn.dataset.scope;
+      renderCurrentView();
+    });
+
+    // --- Page Sort Modal (drag-to-reorder before upload) ---
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function showPageSortModal(files) {
+      state.pendingFiles = [...files];
+      renderSortList();
+      dom.pageSortBackdrop.classList.add('visible');
+    }
+
+    function hidePageSortModal() {
+      dom.pageSortBackdrop.classList.remove('visible');
+      state.pendingFiles = [];
+    }
+
+    function renderSortList() {
+      dom.pageSortList.innerHTML = '';
+      state.pendingFiles.forEach((file, idx) => {
+        const li = document.createElement('li');
+        li.className = 'page-sort-item';
+        li.draggable = true;
+        li.dataset.index = idx;
+
+        li.innerHTML =
+          '<span class="drag-handle">☰</span>' +
+          '<span class="page-num">' + (idx + 1) + '</span>' +
+          '<span class="page-name">' + file.name + '</span>' +
+          '<span class="page-size">' + formatFileSize(file.size) + '</span>' +
+          '<button class="page-remove" aria-label="移除" data-rm="' + idx + '">✕</button>';
+
+        // Drag events
+        li.addEventListener('dragstart', onSortDragStart);
+        li.addEventListener('dragover', onSortDragOver);
+        li.addEventListener('dragleave', onSortDragLeave);
+        li.addEventListener('drop', onSortDrop);
+        li.addEventListener('dragend', onSortDragEnd);
+
+        // Remove button
+        li.querySelector('.page-remove').addEventListener('click', () => {
+          state.pendingFiles.splice(idx, 1);
+          if (state.pendingFiles.length === 0) {
+            hidePageSortModal();
+          } else {
+            renderSortList();
+          }
+        });
+
+        dom.pageSortList.appendChild(li);
+      });
+    }
+
+    let dragSrcIndex = null;
+
+    function onSortDragStart(e) {
+      dragSrcIndex = Number(this.dataset.index);
+      this.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+
+    function onSortDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      this.classList.add('drag-over');
+    }
+
+    function onSortDragLeave() {
+      this.classList.remove('drag-over');
+    }
+
+    function onSortDrop(e) {
+      e.preventDefault();
+      this.classList.remove('drag-over');
+      const targetIndex = Number(this.dataset.index);
+      if (dragSrcIndex === null || dragSrcIndex === targetIndex) return;
+
+      // Reorder the array
+      const [moved] = state.pendingFiles.splice(dragSrcIndex, 1);
+      state.pendingFiles.splice(targetIndex, 0, moved);
+      renderSortList();
+    }
+
+    function onSortDragEnd() {
+      this.classList.remove('dragging');
+      dragSrcIndex = null;
+    }
+
+    dom.btnSortCancel.addEventListener('click', hidePageSortModal);
+
+    dom.btnSortConfirm.addEventListener('click', () => {
+      const files = [...state.pendingFiles];
+      hidePageSortModal();
+      if (files.length > 0) {
+        handleMultiPageUpload(files);
+      }
+    });
+
+    // ===== Extract MusicXML subset for a measure range =====
+    function sliceMusicXML(fullXml, startMeasure, endMeasure) {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(fullXml, 'text/xml');
+
+        // Check for parse errors
+        const parseError = doc.querySelector('parsererror');
+        if (parseError) {
+          console.warn('sliceMusicXML: XML parse error, returning full XML');
+          return fullXml;
+        }
+
+        // Clone the document so we don't mutate the original
+        const clone = doc.cloneNode(true);
+
+        // Find all <measure> elements in each <part>
+        const parts = clone.querySelectorAll('part');
+        for (const part of parts) {
+          const measures = Array.from(part.querySelectorAll('measure'));
+          // Track attributes from the first measure for injection
+          let firstAttrs = null;
+          if (measures.length > 0) {
+            firstAttrs = measures[0].querySelector('attributes');
+          }
+
+          let needsAttrs = true;
+          for (const measure of measures) {
+            const num = parseInt(measure.getAttribute('number') || '0', 10);
+            if (num < startMeasure || num > endMeasure) {
+              part.removeChild(measure);
+            } else {
+              // Inject <attributes> into the first kept measure if it doesn't have one
+              if (needsAttrs && firstAttrs && !measure.querySelector('attributes')) {
+                measure.insertBefore(firstAttrs.cloneNode(true), measure.firstChild);
+              }
+              needsAttrs = false;
+            }
+          }
+        }
+
+        // Serialize back to string
+        const serializer = new XMLSerializer();
+        let result = serializer.serializeToString(clone);
+
+        // Ensure XML declaration is present
+        if (!result.startsWith('<?xml')) {
+          result = '<?xml version="1.0" encoding="UTF-8"?>\n' + result;
+        }
+
+        return result;
+      } catch (err) {
+        console.warn('sliceMusicXML failed, returning full XML:', err);
+        return fullXml;
+      }
+    }
+
+    // ===== Built-in Demo MusicXML (Twinkle Twinkle Little Star) =====
+    const DEMO_MUSICXML = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <work>
+    <work-title>小星星</work-title>
+  </work>
+  <identification>
+    <creator type="composer">莫扎特</creator>
+  </identification>
+  <part-list>
+    <score-part id="P1">
+      <part-name>Piano</part-name>
+    </score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <key>
+          <fifths>0</fifths>
+          <mode>major</mode>
+        </key>
+        <time>
+          <beats>4</beats>
+          <beat-type>4</beat-type>
+        </time>
+      </attributes>
+      <direction>
+        <sound tempo="120"/>
+      </direction>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+    </measure>
+    <measure number="2">
+      <note>
+        <pitch><step>A</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>A</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>2</duration>
+        <type>half</type>
+      </note>
+    </measure>
+    <measure number="3">
+      <note>
+        <pitch><step>F</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>F</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+    </measure>
+    <measure number="4">
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>2</duration>
+        <type>half</type>
+      </note>
+    </measure>
+    <measure number="5">
+      <note>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>F</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>F</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+    </measure>
+    <measure number="6">
+      <note>
+        <pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>2</duration>
+        <type>half</type>
+      </note>
+    </measure>
+    <measure number="7">
+      <note>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>F</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>F</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+    </measure>
+    <measure number="8">
+      <note>
+        <pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>2</duration>
+        <type>half</type>
+      </note>
+    </measure>
+    <measure number="9">
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+    </measure>
+    <measure number="10">
+      <note>
+        <pitch><step>A</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>A</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>G</step><octave>4</octave></pitch>
+        <duration>2</duration>
+        <type>half</type>
+      </note>
+    </measure>
+    <measure number="11">
+      <note>
+        <pitch><step>F</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>F</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>E</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+    </measure>
+    <measure number="12">
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration>
+        <type>quarter</type>
+      </note>
+      <note>
+        <pitch><step>C</step><octave>4</octave></pitch>
+        <duration>2</duration>
+        <type>half</type>
+      </note>
+    </measure>
+  </part>
+</score-partwise>`;
+
+    // ===== MusicXML Validation =====
+    function validateMusicXML(text) {
+      if (!text || typeof text !== 'string') return false;
+      return text.includes('<score-partwise') || text.includes('<score-timewise');
+    }
+
+    // ===== Error Display Helpers =====
+    function showError(message) {
+      dom.errorText.textContent = message;
+      dom.errorBanner.classList.add('visible');
+    }
+
+    function hideError() {
+      dom.errorBanner.classList.remove('visible');
+    }
+
+    // ===== Loading State =====
+    function setLoading(loading, text) {
+      state.isLoading = loading;
+      if (loading) {
+        dom.loadingOverlay.classList.add('visible');
+        dom.loadingOverlay.querySelector('.loading-text').textContent = text || '正在分析中…';
+        dom.btnUpload.disabled = true;
+        dom.btnLoadDemo.disabled = true;
+        dom.btnExportABC.disabled = true;
+        dom.btnExportPNG.disabled = true;
+        dom.btnExportPDF.disabled = true;
+        dom.statusDot.className = 'dot';
+        dom.statusText.textContent = text || '正在分析中…';
+      } else {
+        dom.loadingOverlay.classList.remove('visible');
+        dom.btnUpload.disabled = false;
+        dom.btnLoadDemo.disabled = false;
+        dom.btnExportABC.disabled = false;
+        dom.btnExportPNG.disabled = false;
+        dom.btnExportPDF.disabled = false;
+      }
+    }
+
+    // ===== Request Harmonize =====
+    async function requestHarmonize(xml, difficulty) {
+      setLoading(true, '正在分析中…');
+      hideError();
+      try {
+        const res = await fetch('/api/harmonize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ musicxml: xml, difficulty }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || `服务器错误 (${res.status})`);
+        }
+        // Store response data in state
+        state.currentScore = data.score || null;
+        state.currentMusicXML = data.musicxml || null;
+        state.analysis = data.analysis || null;
+        // Render analysis panel with key, confidence, chords, stats
+        renderAnalysisPanel(data.analysis);
+        // Render the active view
+        renderCurrentView();
+        // Update status
+        dom.statusDot.className = 'dot success';
+        dom.statusText.textContent = '分析完成';
+        return data;
+      } catch (err) {
+        if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
+          showError('网络连接失败，请检查服务器是否运行');
+        } else {
+          showError(err.message || '分析过程中出现错误，请稍后重试');
+        }
+        dom.statusDot.className = 'dot error';
+        dom.statusText.textContent = '分析失败';
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // ===== Detect if file is an image/PDF (needs OMR) =====
+    const OMR_EXTENSIONS = ['png', 'jpg', 'jpeg', 'bmp', 'tiff', 'tif', 'pdf'];
+
+    function isOMRFile(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      return OMR_EXTENSIONS.includes(ext);
+    }
+
+    // ===== OMR + Harmonize (image/PDF → one-shot) =====
+    async function requestOMRHarmonize(file, difficulty) {
+      setLoading(true, '正在识别乐谱（OMR）…');
+      hideError();
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('difficulty', difficulty);
+
+        const res = await fetch('/api/omr/harmonize?difficulty=' + encodeURIComponent(difficulty), {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || `服务器错误 (${res.status})`);
+        }
+        state.currentScore = data.score || null;
+        state.currentMusicXML = data.musicxml || null;
+        state.currentXML = data.musicxml || null;
+        state.analysis = data.analysis || null;
+        renderAnalysisPanel(data.analysis);
+        renderCurrentView();
+        dom.statusDot.className = 'dot success';
+        dom.statusText.textContent = '识别并分析完成';
+        return data;
+      } catch (err) {
+        if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
+          showError('网络连接失败，请检查服务器是否运行');
+        } else {
+          showError(err.message || 'OMR 识别失败，请稍后重试');
+        }
+        dom.statusDot.className = 'dot error';
+        dom.statusText.textContent = '识别失败';
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // ===== File Upload Handler =====
+    async function handleFileUpload(files) {
+      hideError();
+
+      const fileList = Array.from(files);
+
+      // Multiple OMR files → show sort modal for user to confirm order
+      if (fileList.length > 1 && fileList.every(f => isOMRFile(f.name))) {
+        // Pre-sort by filename as a sensible default
+        fileList.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        showPageSortModal(fileList);
+        return;
+      }
+
+      // Single file
+      const file = fileList[0];
+      if (!file) return null;
+
+      // Reset multi-page state for single file
+      state.pages = [];
+      state.pageRanges = [];
+      state.currentPage = 0;
+      state.totalPages = 1;
+      state.mergedXML = null;
+      state.mergedScore = null;
+      updatePaginationUI();
+
+      // Image/PDF → OMR pipeline
+      if (isOMRFile(file.name)) {
+        dom.statusDot.className = 'dot';
+        dom.statusText.textContent = `正在处理：${file.name}`;
+        return await requestOMRHarmonize(file, state.difficulty);
+      }
+
+      // MusicXML → direct harmonize
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          const text = e.target.result;
+          if (!validateMusicXML(text)) {
+            showError('请上传有效的 MusicXML 文件（.xml 或 .musicxml）');
+            resolve(null);
+            return;
+          }
+          state.currentXML = text;
+          dom.statusDot.className = 'dot success';
+          dom.statusText.textContent = `已加载文件：${file.name}`;
+          const result = await requestHarmonize(text, state.difficulty);
+          resolve(result);
+        };
+        reader.onerror = () => {
+          showError('文件读取失败，请重试');
+          reject(reader.error);
+        };
+        reader.readAsText(file);
+      });
+    }
+
+    // ===== Multi-page OMR Upload =====
+    async function handleMultiPageUpload(files) {
+      setLoading(true, `正在识别多页乐谱（共 ${files.length} 页）…`);
+      hideError();
+
+      try {
+        const formData = new FormData();
+        // Files are already in user-confirmed order from the sort modal
+        for (const file of files) {
+          formData.append('files', file);
+        }
+        formData.append('difficulty', state.difficulty);
+
+        const res = await fetch('/api/omr/pages/harmonize?difficulty=' + encodeURIComponent(state.difficulty), {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || `服务器错误 (${res.status})`);
+        }
+
+        // Store merged results
+        state.currentScore = data.score || null;
+        state.currentMusicXML = data.musicxml || null;
+        state.currentXML = data.musicxml || null;
+        state.mergedXML = data.musicxml || null;
+        state.mergedScore = data.score || null;
+        state.analysis = data.analysis || null;
+
+        // Store pagination info
+        const pagination = data.pagination || {};
+        state.totalPages = pagination.totalPages || 1;
+        state.pageRanges = pagination.pageRanges || [];
+        state.currentPage = 0;
+
+        // Build per-page Score slices for page-level browsing
+        state.pages = [];
+        if (state.currentScore && state.pageRanges.length > 0) {
+          for (const range of state.pageRanges) {
+            const pageMeasures = state.currentScore.measures.filter(
+              m => m.number >= range.startMeasure && m.number <= range.endMeasure
+            );
+            // Generate per-page MusicXML subset for OSMD rendering
+            const pageXml = state.currentMusicXML
+              ? sliceMusicXML(state.currentMusicXML, range.startMeasure, range.endMeasure)
+              : null;
+            state.pages.push({
+              score: { ...state.currentScore, measures: pageMeasures },
+              musicxml: pageXml,
+            });
+          }
+        }
+
+        renderAnalysisPanel(data.analysis);
+        updatePaginationUI();
+        renderCurrentView();
+
+        dom.statusDot.className = 'dot success';
+        dom.statusText.textContent = `已识别并分析 ${state.totalPages} 页乐谱`;
+        return data;
+      } catch (err) {
+        if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
+          showError('网络连接失败，请检查服务器是否运行');
+        } else {
+          showError(err.message || '多页 OMR 识别失败');
+        }
+        dom.statusDot.className = 'dot error';
+        dom.statusText.textContent = '识别失败';
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // ===== Load Demo =====
+    async function loadDemo() {
+      hideError();
+      // Reset multi-page state
+      state.pages = [];
+      state.pageRanges = [];
+      state.currentPage = 0;
+      state.totalPages = 1;
+      state.mergedXML = null;
+      state.mergedScore = null;
+      updatePaginationUI();
+
+      state.currentXML = DEMO_MUSICXML;
+      dom.statusDot.className = 'dot success';
+      dom.statusText.textContent = '已加载示例：小星星';
+      return await requestHarmonize(DEMO_MUSICXML, state.difficulty);
+    }
+
+    // ===== Wire Up Event Listeners =====
+    dom.fileInput.addEventListener('change', (e) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        handleFileUpload(files);
+      }
+      // Reset so the same file can be re-uploaded
+      e.target.value = '';
+    });
+
+    dom.btnLoadDemo.addEventListener('click', () => {
+      loadDemo();
+    });
+
+    // ===== OSMD instance (reused across renders) =====
+    let osmdInstance = null;
+
+    // ===== Render Staff View (OSMD) =====
+    function renderStaffView(musicxml) {
+      if (!musicxml) return;
+      try {
+        // Clear placeholder/previous content
+        dom.staffContainer.innerHTML = '';
+        // Always create a fresh OSMD instance since innerHTML was cleared
+        osmdInstance = new opensheetmusicdisplay.OpenSheetMusicDisplay(
+          dom.staffContainer,
+          {
+            autoResize: true,
+            drawTitle: true,
+            drawComposer: true,
+          }
+        );
+        osmdInstance.load(musicxml).then(() => {
+          osmdInstance.render();
+        }).catch((err) => {
+          console.error('OSMD render error:', err);
+          dom.staffContainer.innerHTML =
+            '<div class="placeholder"><div class="icon">⚠</div><p>五线谱渲染失败</p></div>';
+        });
+      } catch (err) {
+        console.error('OSMD init error:', err);
+        dom.staffContainer.innerHTML =
+          '<div class="placeholder"><div class="icon">⚠</div><p>五线谱渲染失败</p></div>';
+      }
+    }
+
+    // ===== Render Jianpu View (Canvas) =====
+    function renderJianpuView(score) {
+      if (!score || !score.measures || score.measures.length === 0) return;
+
+      const canvas = dom.jianpuCanvas;
+      const ctx = canvas.getContext('2d');
+
+      // --- Layout constants ---
+      const NOTE_MAP = { C: 1, D: 2, E: 3, F: 4, G: 5, A: 6, B: 7 };
+      const QUALITY_SUFFIX = {
+        major: '', minor: 'm', diminished: 'dim', augmented: 'aug',
+        dominant7: '7', major7: 'maj7', minor7: 'm7',
+        diminished7: 'dim7', 'half-dim7': 'ø7', sus2: 'sus2', sus4: 'sus4',
+      };
+      const ACC_DISPLAY = {
+        sharp: '♯', flat: '♭', 'double-sharp': '𝄪', 'double-flat': '𝄫',
+        natural: '♮', none: '',
+      };
+
+      const dpr = window.devicePixelRatio || 1;
+      const PADDING_X = 40;
+      const PADDING_TOP = 60;
+      const HEADER_HEIGHT = 50;
+      const CHORD_ROW_H = 22;
+      const NOTE_ROW_H = 28;
+      const DOT_ROW_H = 10;
+      const UNDERLINE_ROW_H = 10;
+      const MEASURE_GAP = 16;
+      const BEAT_WIDTH = 48;
+      const BARLINE_EXTRA = 8;
+      const ROW_SPACING = 24;
+
+      // --- Compute duration in beats ---
+      function durationBeats(durType, dots) {
+        const base = { whole: 4, half: 2, quarter: 1, eighth: 0.5, '16th': 0.25, '32nd': 0.125 };
+        let val = base[durType] || 1;
+        let dotVal = val;
+        for (let i = 0; i < (dots || 0); i++) {
+          dotVal /= 2;
+          val += dotVal;
+        }
+        return val;
+      }
+
+      // --- Compute how many beats per measure ---
+      const beatsPerMeasure = (score.time ? score.time.beats : 4);
+      const beatType = (score.time ? score.time.beatType : 4);
+
+      // --- Determine how many measures fit per row ---
+      const containerWidth = dom.jianpuContainer.clientWidth || 900;
+      const usableWidth = containerWidth - PADDING_X * 2;
+      const measureWidth = (m) => {
+        return beatsPerMeasure * BEAT_WIDTH + BARLINE_EXTRA;
+      };
+      const measPerRow = Math.max(1, Math.floor(usableWidth / measureWidth(null)));
+
+      // --- Compute rows ---
+      const totalMeasures = score.measures.length;
+      const numRows = Math.ceil(totalMeasures / measPerRow);
+      const rowHeight = CHORD_ROW_H + DOT_ROW_H + NOTE_ROW_H + DOT_ROW_H + UNDERLINE_ROW_H + ROW_SPACING;
+      const totalHeight = PADDING_TOP + HEADER_HEIGHT + numRows * rowHeight + 20;
+      const totalWidth = containerWidth;
+
+      // --- Set canvas size (HiDPI) ---
+      canvas.width = totalWidth * dpr;
+      canvas.height = totalHeight * dpr;
+      canvas.style.width = totalWidth + 'px';
+      canvas.style.height = totalHeight + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      // --- Clear ---
+      ctx.clearRect(0, 0, totalWidth, totalHeight);
+      ctx.fillStyle = 'transparent';
+      ctx.fillRect(0, 0, totalWidth, totalHeight);
+
+      // --- Draw header: key and time signature ---
+      ctx.fillStyle = '#3e2723';
+      ctx.font = '600 16px "Noto Serif SC", serif';
+      const tonicAcc = ACC_DISPLAY[score.key.tonicAccidental] || '';
+      const modeStr = score.key.mode === 'minor' ? '小调' : '大调';
+      const keyStr = '1=' + score.key.tonic + tonicAcc;
+      ctx.fillText(keyStr, PADDING_X, PADDING_TOP);
+
+      const timeStr = score.time.beats + '/' + score.time.beatType;
+      ctx.fillText(timeStr, PADDING_X + 100, PADDING_TOP);
+
+      if (score.title) {
+        ctx.font = '700 18px "Noto Serif SC", serif';
+        const titleW = ctx.measureText(score.title).width;
+        ctx.fillText(score.title, (totalWidth - titleW) / 2, PADDING_TOP);
+      }
+
+      // --- Draw measures row by row ---
+      for (let row = 0; row < numRows; row++) {
+        const rowY = PADDING_TOP + HEADER_HEIGHT + row * rowHeight;
+        const startIdx = row * measPerRow;
+        const endIdx = Math.min(startIdx + measPerRow, totalMeasures);
+
+        let curX = PADDING_X;
+
+        for (let mi = startIdx; mi < endIdx; mi++) {
+          const measure = score.measures[mi];
+          const mWidth = beatsPerMeasure * BEAT_WIDTH;
+
+          // --- Draw chords above notes ---
+          if (measure.chords && measure.chords.length > 0) {
+            ctx.font = '600 13px "Noto Serif SC", sans-serif';
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--chord-color').trim() || '#c0392b';
+            for (const chord of measure.chords) {
+              const chordX = curX + (chord.beat || 0) * BEAT_WIDTH;
+              const accStr = ACC_DISPLAY[chord.rootAccidental] || '';
+              const qualStr = QUALITY_SUFFIX[chord.quality] || '';
+              const chordLabel = chord.root + accStr + qualStr;
+              ctx.fillText(chordLabel, chordX, rowY + CHORD_ROW_H - 4);
+            }
+          }
+
+          // --- Draw notes ---
+          const noteBaseY = rowY + CHORD_ROW_H + DOT_ROW_H + NOTE_ROW_H;
+          ctx.font = '400 18px "Courier New", monospace';
+          ctx.fillStyle = '#3e2723';
+
+          for (const ev of measure.events) {
+            const beatPos = ev.beat || 0;
+            const noteX = curX + beatPos * BEAT_WIDTH;
+
+            if (ev.type === 'rest') {
+              ctx.fillStyle = '#6d4c41';
+              ctx.fillText('0', noteX, noteBaseY);
+              ctx.fillStyle = '#3e2723';
+              // Dotted rest
+              if (ev.dots > 0) {
+                ctx.fillText('.', noteX + 14, noteBaseY);
+              }
+            } else if (ev.type === 'note' && ev.pitch) {
+              const num = NOTE_MAP[ev.pitch.step] || 0;
+              const accStr = ACC_DISPLAY[ev.pitch.accidental] || '';
+              ctx.fillText(String(num), noteX, noteBaseY);
+
+              // Accidental before number
+              if (accStr) {
+                ctx.font = '400 11px "Noto Serif SC", serif';
+                ctx.fillText(accStr, noteX - 10, noteBaseY - 2);
+                ctx.font = '400 18px "Courier New", monospace';
+              }
+
+              // Dotted note
+              if (ev.dots > 0) {
+                for (let d = 0; d < ev.dots; d++) {
+                  ctx.fillText('.', noteX + 14 + d * 6, noteBaseY);
+                }
+              }
+
+              // Octave dots
+              const octave = ev.pitch.octave;
+              if (octave >= 5) {
+                // Dots above
+                const dotCount = octave - 4;
+                for (let d = 0; d < dotCount; d++) {
+                  ctx.beginPath();
+                  ctx.arc(noteX + 5, rowY + CHORD_ROW_H + 4 - d * 6, 2, 0, Math.PI * 2);
+                  ctx.fill();
+                }
+              } else if (octave <= 3) {
+                // Dots below
+                const dotCount = 4 - octave;
+                for (let d = 0; d < dotCount; d++) {
+                  ctx.beginPath();
+                  ctx.arc(noteX + 5, noteBaseY + 6 + d * 6, 2, 0, Math.PI * 2);
+                  ctx.fill();
+                }
+              }
+
+              // Duration underlines (eighth = 1 line, 16th = 2, 32nd = 3)
+              const underlines = { eighth: 1, '16th': 2, '32nd': 3 };
+              const lineCount = underlines[ev.duration] || 0;
+              if (lineCount > 0) {
+                ctx.strokeStyle = '#3e2723';
+                ctx.lineWidth = 1.5;
+                const ulY = noteBaseY + DOT_ROW_H + 2;
+                const durBeats = durationBeats(ev.duration, 0);
+                const lineW = Math.max(durBeats * BEAT_WIDTH - 8, 10);
+                for (let li = 0; li < lineCount; li++) {
+                  ctx.beginPath();
+                  ctx.moveTo(noteX, ulY + li * 4);
+                  ctx.lineTo(noteX + lineW, ulY + li * 4);
+                  ctx.stroke();
+                }
+              }
+            }
+          }
+
+          // --- Bar line ---
+          curX += mWidth;
+          ctx.strokeStyle = '#8d6e63';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(curX, rowY + CHORD_ROW_H);
+          ctx.lineTo(curX, noteBaseY + DOT_ROW_H);
+          ctx.stroke();
+          curX += BARLINE_EXTRA;
+        }
+      }
+    }
+
+    // ===== Render Analysis Panel =====
+    function renderAnalysisPanel(analysis) {
+      if (!analysis) return;
+
+      // Key and confidence
+      dom.analysisKey.textContent = analysis.key || '—';
+      dom.analysisConfidence.textContent =
+        typeof analysis.confidence === 'number'
+          ? (analysis.confidence * 100).toFixed(1) + '%'
+          : '—';
+
+      // Stats
+      if (analysis.stats) {
+        dom.analysisMeasures.textContent = analysis.stats.totalMeasures ?? '—';
+        dom.analysisAPICalls.textContent = analysis.stats.apiCalls ?? '—';
+
+        // Format duration: use seconds if >= 1000ms, otherwise ms
+        const ms = analysis.stats.durationMs;
+        if (typeof ms === 'number') {
+          dom.analysisDuration.textContent = ms >= 1000
+            ? (ms / 1000).toFixed(1) + 's'
+            : ms + 'ms';
+        } else {
+          dom.analysisDuration.textContent = '—';
+        }
+      } else {
+        dom.analysisMeasures.textContent = '—';
+        dom.analysisAPICalls.textContent = '—';
+        dom.analysisDuration.textContent = '—';
+      }
+
+      // Chord progression
+      if (Array.isArray(analysis.chordProgression) && analysis.chordProgression.length > 0) {
+        dom.analysisChords.textContent = analysis.chordProgression.join(' → ');
+      } else {
+        dom.analysisChords.textContent = '—';
+      }
+
+      // Show the panel
+      dom.analysisPanel.classList.add('visible');
+    }
+
+    // ===== ABC Export (supports per-page and full) =====
+    async function exportABC() {
+      if (!state.currentScore) {
+        showError('请先加载并分析乐谱');
+        return;
+      }
+      try {
+        const score = state.viewScope === 'all' || state.totalPages <= 1
+          ? state.currentScore
+          : (state.pages[state.currentPage]?.score || state.currentScore);
+
+        const res = await fetch('/api/export/abc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ score }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || `导出失败 (${res.status})`);
+        }
+        dom.abcOutput.value = data.abc;
+        dom.abcModal.classList.add('visible');
+      } catch (err) {
+        if (err.name === 'TypeError' && err.message === 'Failed to fetch') {
+          showError('网络连接失败，请检查服务器是否运行');
+        } else {
+          showError(err.message || '导出 ABC 失败，请稍后重试');
+        }
+      }
+    }
+
+    dom.btnExportABC.addEventListener('click', () => exportABC());
+
+    dom.btnCopyABC.addEventListener('click', () => {
+      const text = dom.abcOutput.value;
+      navigator.clipboard.writeText(text).then(() => {
+        const original = dom.btnCopyABC.textContent;
+        dom.btnCopyABC.textContent = '✅ 已复制';
+        setTimeout(() => { dom.btnCopyABC.textContent = original; }, 2000);
+      }).catch(() => {
+        showError('复制失败，请手动选择文本复制');
+      });
+    });
+
+    // ===== Export Dropdown Logic =====
+    function setupDropdown(btnId, menuId) {
+      const btn = document.getElementById(btnId);
+      const menu = document.getElementById(menuId);
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // If single page, just export directly (no dropdown)
+        if (state.totalPages <= 1) {
+          menu.closest('.export-dropdown').dispatchEvent(
+            new CustomEvent('export-action', { detail: 'current' })
+          );
+          return;
+        }
+        // Toggle dropdown
+        const wasOpen = menu.classList.contains('open');
+        closeAllDropdowns();
+        if (!wasOpen) menu.classList.add('open');
+      });
+      menu.addEventListener('click', (e) => {
+        const action = e.target.dataset.action;
+        if (!action) return;
+        menu.classList.remove('open');
+        menu.closest('.export-dropdown').dispatchEvent(
+          new CustomEvent('export-action', { detail: action })
+        );
+      });
+    }
+
+    function closeAllDropdowns() {
+      document.querySelectorAll('.export-dropdown-menu').forEach(m => m.classList.remove('open'));
+    }
+
+    document.addEventListener('click', closeAllDropdowns);
+
+    setupDropdown('btnExportPNG', 'menuPNG');
+    setupDropdown('btnExportPDF', 'menuPDF');
+
+    dom.dropdownPNG.addEventListener('export-action', (e) => {
+      if (e.detail === 'all' && state.totalPages > 1) exportAllPagesPNG();
+      else exportPNG();
+    });
+
+    dom.dropdownPDF.addEventListener('export-action', (e) => {
+      if (e.detail === 'all' && state.totalPages > 1) exportAllPagesPDF();
+      else exportPDF();
+    });
+
+    // ===== Capture a single DOM element to canvas =====
+    async function captureElement(el) {
+      return html2canvas(el, {
+        backgroundColor: '#faf7f2',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+    }
+
+    // ===== Render a page into the offscreen container and capture =====
+    async function renderPageOffscreen(pageIndex) {
+      const page = state.pages[pageIndex];
+      if (!page) return null;
+
+      const container = dom.offscreenRender;
+      container.style.visibility = 'hidden';
+
+      if (state.currentView === 'jianpu' || !page.musicxml) {
+        // Render jianpu into an offscreen canvas
+        const tmpCanvas = document.createElement('canvas');
+        container.innerHTML = '';
+        container.appendChild(tmpCanvas);
+        renderJianpuToCanvas(tmpCanvas, page.score, container.clientWidth || 900);
+        await new Promise(r => setTimeout(r, 50));
+        const captured = await captureElement(container);
+        container.innerHTML = '';
+        return captured;
+      } else {
+        // Render staff (OSMD) into offscreen container
+        container.innerHTML = '';
+        const div = document.createElement('div');
+        div.style.width = '100%';
+        container.appendChild(div);
+
+        const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(div, {
+          autoResize: false,
+          drawTitle: true,
+          drawComposer: true,
+        });
+        await osmd.load(page.musicxml);
+        osmd.render();
+        await new Promise(r => setTimeout(r, 200));
+        const captured = await captureElement(container);
+        container.innerHTML = '';
+        return captured;
+      }
+    }
+
+    // ===== Jianpu rendering to arbitrary canvas (extracted for reuse) =====
+    function renderJianpuToCanvas(canvas, score, containerWidth) {
+      // Reuse the same rendering logic as renderJianpuView but to a given canvas
+      if (!score || !score.measures || score.measures.length === 0) return;
+      // Temporarily swap the canvas and call the renderer
+      const origCanvas = dom.jianpuCanvas;
+      const origContainer = dom.jianpuContainer;
+      const origWidth = origContainer.clientWidth;
+
+      // We'll just call the existing render function with a trick:
+      // set the jianpu refs temporarily
+      dom.jianpuCanvas = canvas;
+      const fakeContainer = { clientWidth: containerWidth || 900 };
+      dom.jianpuContainer = fakeContainer;
+      renderJianpuView(score);
+      dom.jianpuCanvas = origCanvas;
+      dom.jianpuContainer = origContainer;
+    }
+
+    // ===== PNG Export (current page) =====
+    async function exportPNG() {
+      const target = getExportTarget();
+      if (!target) {
+        showError('请先加载并分析乐谱');
+        return;
+      }
+      try {
+        setLoading(true, '正在生成 PNG…');
+        await new Promise(r => setTimeout(r, 100));
+        const canvas = await captureElement(target);
+        canvas.toBlob((blob) => {
+          if (!blob) { showError('PNG 生成失败'); return; }
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          const suffix = state.totalPages > 1 ? `_page${state.currentPage + 1}` : '';
+          a.download = `score${suffix}.png`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }, 'image/png');
+      } catch (err) {
+        showError(err.message || 'PNG 导出失败');
+      } finally {
+        setLoading(false);
+        dom.statusDot.className = 'dot success';
+        dom.statusText.textContent = '就绪';
+      }
+    }
+
+    // ===== PNG Export (all pages) =====
+    async function exportAllPagesPNG() {
+      if (state.totalPages <= 1 || state.pages.length === 0) {
+        return exportPNG();
+      }
+      try {
+        setLoading(true, '正在批量生成 PNG（共 ' + state.totalPages + ' 页）…');
+        for (let i = 0; i < state.pages.length; i++) {
+          dom.loadingOverlay.querySelector('.loading-text').textContent =
+            `正在生成第 ${i + 1}/${state.totalPages} 页…`;
+          const canvas = await renderPageOffscreen(i);
+          if (!canvas) continue;
+          await new Promise((resolve) => {
+            canvas.toBlob((blob) => {
+              if (blob) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `score_page${i + 1}.png`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }
+              // Small delay between downloads so browser doesn't block them
+              setTimeout(resolve, 300);
+            }, 'image/png');
+          });
+        }
+      } catch (err) {
+        showError(err.message || '批量 PNG 导出失败');
+      } finally {
+        setLoading(false);
+        dom.statusDot.className = 'dot success';
+        dom.statusText.textContent = '就绪';
+      }
+    }
+
+    // ===== PDF Export (current page) =====
+    async function exportPDF() {
+      const target = getExportTarget();
+      if (!target) {
+        showError('请先加载并分析乐谱');
+        return;
+      }
+      try {
+        setLoading(true, '正在生成 PDF…');
+        await new Promise(r => setTimeout(r, 100));
+        const canvas = await captureElement(target);
+        const pdf = canvasToPDFPage(canvas);
+        const suffix = state.totalPages > 1 ? `_page${state.currentPage + 1}` : '';
+        pdf.save(`score${suffix}.pdf`);
+      } catch (err) {
+        showError(err.message || 'PDF 导出失败');
+      } finally {
+        setLoading(false);
+        dom.statusDot.className = 'dot success';
+        dom.statusText.textContent = '就绪';
+      }
+    }
+
+    // ===== PDF Export (all pages → single multi-page PDF) =====
+    async function exportAllPagesPDF() {
+      if (state.totalPages <= 1 || state.pages.length === 0) {
+        return exportPDF();
+      }
+      try {
+        setLoading(true, '正在批量生成 PDF（共 ' + state.totalPages + ' 页）…');
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const pageW = 210, margin = 10;
+        const availW = pageW - margin * 2;
+        const availH = 297 - margin * 2;
+
+        for (let i = 0; i < state.pages.length; i++) {
+          dom.loadingOverlay.querySelector('.loading-text').textContent =
+            `正在生成第 ${i + 1}/${state.totalPages} 页…`;
+          if (i > 0) pdf.addPage();
+          const canvas = await renderPageOffscreen(i);
+          if (!canvas) continue;
+          const imgData = canvas.toDataURL('image/png');
+          const scaledH = (canvas.height / canvas.width) * availW;
+          const drawH = Math.min(scaledH, availH);
+          pdf.addImage(imgData, 'PNG', margin, margin, availW, drawH);
+        }
+
+        pdf.save('score_all.pdf');
+      } catch (err) {
+        showError(err.message || '批量 PDF 导出失败');
+      } finally {
+        setLoading(false);
+        dom.statusDot.className = 'dot success';
+        dom.statusText.textContent = '就绪';
+      }
+    }
+
+    // ===== Helper: canvas → single-page jsPDF =====
+    function canvasToPDFPage(canvas) {
+      const { jsPDF } = window.jspdf;
+      const pageW = 210, margin = 10;
+      const availW = pageW - margin * 2;
+      const availH = 297 - margin * 2;
+      const scaledH = (canvas.height / canvas.width) * availW;
+
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+      let yRemaining = scaledH;
+      let srcY = 0;
+      let firstPage = true;
+
+      while (yRemaining > 0) {
+        if (!firstPage) pdf.addPage();
+        firstPage = false;
+        const drawH = Math.min(yRemaining, availH);
+        const srcSliceH = (drawH / scaledH) * canvas.height;
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = srcSliceH;
+        const ctx = sliceCanvas.getContext('2d');
+        ctx.drawImage(canvas, 0, srcY, canvas.width, srcSliceH, 0, 0, canvas.width, srcSliceH);
+        pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, availW, drawH);
+        srcY += srcSliceH;
+        yRemaining -= drawH;
+      }
+
+      return pdf;
+    }
+
+    /**
+     * 获取当前应该截取导出的 DOM 元素
+     */
+    function getExportTarget() {
+      if (state.currentView === 'staff') {
+        if (dom.staffContainer.querySelector('svg')) return dom.staffContainer;
+      } else if (state.currentView === 'jianpu') {
+        if (dom.jianpuCanvas.width > 0) return dom.jianpuContainer;
+      }
+      return null;
+    }
+    // ========================================
+    // ===== Dev Testing Tools — OMR Test =====
+    // ========================================
+    (function initOmrTest() {
+      const toggle = document.getElementById('omrTestToggle');
+      const body = document.getElementById('omrTestBody');
+      const fileInput = document.getElementById('omrTestFileInput');
+      const btnUpload = document.getElementById('btnOmrTestUpload');
+      const btnDownload = document.getElementById('btnOmrTestDownload');
+      const btnRender = document.getElementById('btnOmrTestRender');
+      const status = document.getElementById('omrTestStatus');
+      const info = document.getElementById('omrTestInfo');
+      const output = document.getElementById('omrTestOutput');
+      const renderContainer = document.getElementById('omrTestRenderContainer');
+
+      let omrTestXml = null;
+
+      // Toggle collapse
+      toggle.addEventListener('click', () => {
+        const isHidden = body.style.display === 'none';
+        body.style.display = isHidden ? 'block' : 'none';
+        toggle.querySelector('.toggle-icon').textContent = isHidden ? '▲' : '▼';
+      });
+
+      btnUpload.addEventListener('click', () => fileInput.click());
+
+      fileInput.addEventListener('change', async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        status.textContent = `正在识别: ${file.name} …`;
+        btnDownload.disabled = true;
+        btnRender.disabled = true;
+        output.style.display = 'none';
+        renderContainer.innerHTML = '';
+        info.textContent = '';
+
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+
+          const t0 = performance.now();
+          const res = await fetch('/api/omr', {
+            method: 'POST',
+            body: formData,
+          });
+          const elapsed = (performance.now() - t0).toFixed(0);
+          const data = await res.json();
+
+          if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+          omrTestXml = data.musicxml;
+          output.value = omrTestXml;
+          output.style.display = 'block';
+
+          // Count measures
+          const measureCount = (omrTestXml.match(/<measure[\s>]/g) || []).length;
+          info.innerHTML = `✅ 识别完成 · <b>${measureCount}</b> 个小节 · 耗时 <b>${elapsed}ms</b> · ${(omrTestXml.length / 1024).toFixed(1)} KB`;
+          status.textContent = '';
+          btnDownload.disabled = false;
+          btnRender.disabled = false;
+        } catch (err) {
+          status.textContent = '❌ 识别失败: ' + err.message;
+          omrTestXml = null;
+        }
+        fileInput.value = '';
+      });
+
+      btnDownload.addEventListener('click', () => {
+        if (!omrTestXml) return;
+        const blob = new Blob([omrTestXml], { type: 'application/xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'omr_test_result.xml';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      btnRender.addEventListener('click', () => {
+        if (!omrTestXml) return;
+        renderContainer.innerHTML = '';
+        const div = document.createElement('div');
+        renderContainer.appendChild(div);
+        try {
+          const osmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(div, {
+            autoResize: true, drawTitle: true, drawComposer: true,
+          });
+          osmd.load(omrTestXml).then(() => {
+            osmd.render();
+            info.innerHTML += ' · 🎵 渲染成功';
+          }).catch(err => {
+            renderContainer.innerHTML = '<div style="color:var(--error);padding:12px;">⚠ 渲染失败: ' + err.message + '</div>';
+          });
+        } catch (err) {
+          renderContainer.innerHTML = '<div style="color:var(--error);padding:12px;">⚠ 初始化失败: ' + err.message + '</div>';
+        }
+      });
+    })();
+
+    // =====================================================
+    // ===== Dev Testing Tools — MusicXML Render Test  =====
+    // =====================================================
+    (function initXmlTest() {
+      const toggle = document.getElementById('xmlTestToggle');
+      const body = document.getElementById('xmlTestBody');
+      const fileInput = document.getElementById('xmlTestFileInput');
+      const btnUpload = document.getElementById('btnXmlTestUpload');
+      const btnPaste = document.getElementById('btnXmlTestPaste');
+      const btnRender = document.getElementById('btnXmlTestRender');
+      const btnExportPNG = document.getElementById('btnXmlTestExportPNG');
+      const btnExportPDF = document.getElementById('btnXmlTestExportPDF');
+      const statusEl = document.getElementById('xmlTestStatus');
+      const textarea = document.getElementById('xmlTestInput');
+      const renderContainer = document.getElementById('xmlTestRenderContainer');
+
+      let xmlTestOsmd = null;
+
+      // Toggle collapse
+      toggle.addEventListener('click', () => {
+        const isHidden = body.style.display === 'none';
+        body.style.display = isHidden ? 'block' : 'none';
+        toggle.querySelector('.toggle-icon').textContent = isHidden ? '▲' : '▼';
+      });
+
+      // Enable render button when textarea has content
+      textarea.addEventListener('input', () => {
+        const hasContent = textarea.value.trim().length > 0;
+        btnRender.disabled = !hasContent;
+        btnExportPNG.disabled = true;
+        btnExportPDF.disabled = true;
+      });
+
+      btnUpload.addEventListener('click', () => fileInput.click());
+
+      fileInput.addEventListener('change', () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          textarea.value = e.target.result;
+          btnRender.disabled = false;
+          btnExportPNG.disabled = true;
+          btnExportPDF.disabled = true;
+          statusEl.textContent = `已加载文件: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+        };
+        reader.readAsText(file);
+        fileInput.value = '';
+      });
+
+      btnPaste.addEventListener('click', () => {
+        const cachedXml = localStorage.getItem('harmony_cached_xml');
+        if (!cachedXml) {
+          statusEl.textContent = '⚠ 没有找到缓存的 XML';
+          return;
+        }
+        const cachedAt = localStorage.getItem('harmony_cached_at') || '未知';
+        textarea.value = cachedXml;
+        btnRender.disabled = false;
+        btnExportPNG.disabled = true;
+        btnExportPDF.disabled = true;
+        statusEl.textContent = `已从缓存加载 (${(cachedXml.length / 1024).toFixed(1)} KB, 缓存于 ${cachedAt})`;
+      });
+
+      btnRender.addEventListener('click', () => {
+        const xml = textarea.value.trim();
+        if (!xml) return;
+        renderContainer.innerHTML = '';
+        statusEl.textContent = '正在渲染…';
+        const div = document.createElement('div');
+        renderContainer.appendChild(div);
+        try {
+          xmlTestOsmd = new opensheetmusicdisplay.OpenSheetMusicDisplay(div, {
+            autoResize: true, drawTitle: true, drawComposer: true,
+          });
+          const t0 = performance.now();
+          xmlTestOsmd.load(xml).then(() => {
+            xmlTestOsmd.render();
+            const elapsed = (performance.now() - t0).toFixed(0);
+            statusEl.textContent = `✅ 渲染成功 (${elapsed}ms)`;
+            btnExportPNG.disabled = false;
+            btnExportPDF.disabled = false;
+          }).catch(err => {
+            statusEl.textContent = '❌ 渲染失败: ' + err.message;
+            renderContainer.innerHTML = '<div style="color:var(--error);padding:12px;">⚠ ' + err.message + '</div>';
+            xmlTestOsmd = null;
+          });
+        } catch (err) {
+          statusEl.textContent = '❌ 初始化失败: ' + err.message;
+          xmlTestOsmd = null;
+        }
+      });
+
+      // Export PNG
+      btnExportPNG.addEventListener('click', async () => {
+        if (!renderContainer.querySelector('svg')) return;
+        statusEl.textContent = '正在生成 PNG…';
+        try {
+          const canvas = await html2canvas(renderContainer, {
+            backgroundColor: '#faf7f2', scale: 2, useCORS: true, logging: false,
+          });
+          canvas.toBlob((blob) => {
+            if (!blob) { statusEl.textContent = '❌ PNG 生成失败'; return; }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'xml_test_render.png';
+            a.click();
+            URL.revokeObjectURL(url);
+            statusEl.textContent = '✅ PNG 已下载';
+          }, 'image/png');
+        } catch (err) {
+          statusEl.textContent = '❌ PNG 导出失败: ' + err.message;
+        }
+      });
+
+      // Export PDF
+      btnExportPDF.addEventListener('click', async () => {
+        if (!renderContainer.querySelector('svg')) return;
+        statusEl.textContent = '正在生成 PDF…';
+        try {
+          const canvas = await html2canvas(renderContainer, {
+            backgroundColor: '#faf7f2', scale: 2, useCORS: true, logging: false,
+          });
+          const { jsPDF } = window.jspdf;
+          const margin = 10;
+          const availW = 210 - margin * 2;
+          const scaledH = (canvas.height / canvas.width) * availW;
+          const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+          pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin, margin, availW, Math.min(scaledH, 277));
+          pdf.save('xml_test_render.pdf');
+          statusEl.textContent = '✅ PDF 已下载';
+        } catch (err) {
+          statusEl.textContent = '❌ PDF 导出失败: ' + err.message;
+        }
+      });
+    })();
+  </script>
+
+</body>
+
+</html>

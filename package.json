@@ -1,0 +1,38 @@
+{
+  "name": "harmony-engine",
+  "version": "0.1.0",
+  "description": "自动和声分析引擎 - 输入旋律，输出和弦方案",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "start:server": "tsx server/index.ts",
+    "dev": "tsx watch server/index.ts",
+    "precompute-embeddings": "tsx scripts/precompute-embeddings.ts"
+  },
+  "dependencies": {
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.0.0",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "fast-xml-parser": "^4.5.1",
+    "multer": "^2.0.2",
+    "openai": "^6.21.0",
+    "pdfkit": "^0.17.2",
+    "sharp": "^0.34.5",
+    "stream-chain": "^3.4.0",
+    "stream-json": "^1.9.1",
+    "tsx": "^4.21.0",
+    "verovio": "^6.0.1"
+  },
+  "devDependencies": {
+    "@types/pdfkit": "^0.17.5",
+    "fast-check": "^4.5.3",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

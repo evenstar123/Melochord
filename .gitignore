@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Environment variables (contains API keys)
+.env.local
+.env
+
+# Large data files (too big for git)
+data/phrase_embeddings.json
+data/phrase_embeddings.bin
+data/phrase_meta.json
+
+# Build output
+dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+
+# Logs
+*.log

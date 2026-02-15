@@ -1,0 +1,361 @@
+================================================================================
+                    Harmony Engine — 自动和声分析引擎
+                          项目描述文档
+================================================================================
+
+一、项目概述
+────────────────────────────────────────────────────────────────────────────────
+
+Harmony Engine 是一个基于 RAG（检索增强生成）+ LLM（大语言模型）的自动和声分析
+平台。用户上传旋律（MusicXML 文件或乐谱图片/PDF），系统自动为其配置和弦，生成
+带和弦标注的领谱（Lead Sheet），并提供五线谱和简谱双视图可视化。
+
+核心用户场景：辅助音乐老师即兴伴奏、辅助编曲学习者理解和声进行。
+
+技术栈：TypeScript + Node.js + Express，前端为单页 HTML 应用，无框架依赖。
+
+
+二、系统架构
+────────────────────────────────────────────────────────────────────────────────
+
+完整处理流程：
+
+  乐谱图片/PDF ──→ OMR 识别（Audiveris）──→ MusicXML
+                                                │
+  MusicXML 文件 ────────────────────────────────┘
+        │
+        ▼
+  MusicXML 解析器 ──→ 内部表示 IR（Score）
+        │
+        ├──→ 调性分析（规则层：MusicXML 调号 + Krumhansl-Schmuckler 算法验证）
+        │
+        ├──→ 旋律特征提取（音程序列 + 节奏密度 + 音级序列）
+        │         │
+        │         ▼
+        │    RAG 检索（text-embedding-v4 向量化 → Hooktheory 知识库余弦相似度匹配）
+        │         │
+        │         ▼
+        │    LLM 和弦生成（Qwen-plus，DashScope API，分块 4 小节处理）
+        │         │
+        │         ▼
+        │    RNA 和弦 → ChordSymbol 转换（罗马数字级数 → 具体和弦名）
+        │
+        ▼
+  和弦注入 MusicXML（<harmony> 元素）──→ OSMD 五线谱渲染
+        │
+        ├──→ Canvas 简谱渲染
+        │
+        └──→ ABC Notation 导出
+
+
+三、模块详细说明
+────────────────────────────────────────────────────────────────────────────────
+
+3.1 OMR 光学乐谱识别（src/omr/）
+
+  - audiveris-omr.ts：集成 Audiveris 5.9.0 CLI 进行五线谱识别
+    · 支持格式：PNG、JPG、BMP、TIFF、PDF
+    · 自动预处理：低分辨率图片（<2400px 宽）使用 sharp 库进行 lanczos3 放大
+      并设置 300 DPI 元数据，确保 Audiveris 识别精度
+    · 支持文件路径输入（recognizeScore）和内存 Buffer 输入（recognizeBuffer）
+    · 自动检测 Audiveris 安装路径，支持环境变量 AUDIVERIS_PATH 配置
+    · 超时控制，默认 120 秒
+
+  - mxl-unzip.ts：MXL 文件解压器
+    · Audiveris 输出 .mxl 格式（压缩的 MusicXML）
+    · 纯 TypeScript 实现的 ZIP 解压，通过 Central Directory 解析
+    · 支持 Deflate 解压（使用 Node.js zlib）
+    · 处理了 data descriptor 场景（本地文件头 compressedSize=0 的情况）
+
+3.2 MusicXML 解析器（src/parser/）
+
+  - musicxml-parser.ts：将 MusicXML 文档解析为内部 Score 表示
+    · 使用 fast-xml-parser 进行 XML 解析
+    · 提取元信息：曲名、作曲者、调性、拍号、速度
+    · 解析音符：音高（音名+变音记号+八度）、时值、附点、连音线
+    · 解析休止符
+    · 处理多声部钢琴谱：只取第一个 part（右手/主旋律）
+    · 和弦音处理：同一拍多个音同时发声时，保留最高音作为旋律音
+    · 支持小节内调性变化和拍号变化
+
+3.3 核心数据模型（src/core/）
+
+  - types.ts：内部音乐表示 IR（Intermediate Representation）
+    · Pitch：音高（音名 + 变音记号 + 八度），保留音名语义（区分 C# 和 Db）
+    · Note / Rest：音符和休止符，含时值、附点、连音线、拍位置
+    · ChordSymbol：和弦标记（根音 + 质量 + 拍位置）
+    · Measure：小节（音乐事件列表 + 和弦标注 + 调性/拍号变化）
+    · Score：完整乐谱（曲名、作曲者、调性、拍号、速度、所有小节）
+    · 支持 11 种和弦质量：大/小/减/增三和弦，属七/大七/小七/减七/半减七，sus2/sus4
+    · 支持 6 种时值：全/二分/四分/八分/十六分/三十二分音符
+
+  - constants.ts：乐理常量
+    · 音名到半音映射、变音记号偏移
+    · 五度圈调性映射（fifths -7 到 +7）
+    · 大调/小调音阶音程模板
+    · 和弦音程模板（11 种和弦质量）
+    · MusicXML 时值映射
+
+3.4 调性分析器（src/analyzer/）
+
+  - key-analyzer.ts：双路径调性分析
+    · 主路径：直接读取 MusicXML 中的调号信息
+    · 验证路径：Krumhansl-Schmuckler 算法
+      - 统计乐谱中所有音符的加权音高分布（时值作为权重）
+      - 与 Krumhansl-Kessler 大调/小调音高分布模板计算皮尔逊相关系数
+      - 遍历所有 24 个调（12 大调 + 12 小调），找到最佳匹配
+    · 智能决策：
+      - MusicXML 与 KS 一致 → 高置信度采用
+      - 关系大小调差异 → 根据相关系数差距决定
+      - 完全不一致 → KS 相关系数 >0.8 时采用 KS 结果
+    · 输出：调性 + 置信度 + 分析来源 + top-5 候选调性
+
+3.5 和声引擎（src/harmonizer/）
+
+  - melody-features.ts：旋律特征提取
+    · 从 Score 提取：音程序列、节奏模式、音级序列（相对于主音）
+    · 计算节奏密度（每拍平均音符数）
+    · 生成 RAG 检索查询文本（每 2 小节一个查询）
+    · 生成 LLM prompt 描述文本
+
+  - rag-retriever.ts：RAG 检索器
+    · 使用阿里云 DashScope text-embedding-v4 模型进行文本向量化
+    · 知识库：Hooktheory 数据集（26,175 首歌曲的旋律+和弦片段）
+    · 支持预计算 embedding 缓存（phrase_embeddings.json），检索时只需 1 次 API 调用
+    · 无缓存时回退到实时 embedding（多次 API 调用）
+    · 预筛选：按调式过滤 + 旋律长度粗筛，控制候选数量
+    · 余弦相似度排序，返回 top-K 最相似片段
+
+  - llm-harmonizer.ts：LLM 和弦生成器
+    · 使用阿里云 DashScope Qwen-plus 模型
+    · 系统 prompt 包含和声规则和难度级别指导
+    · 用户 prompt 包含旋律特征描述 + RAG 检索到的参考和弦进行
+    · 三级难度：
+      - basic：只用 I, IV, V, vi 四个基本和弦
+      - intermediate：顺阶七和弦 + 常见替代和弦
+      - advanced：离调和弦、借用和弦、挂留和弦等
+    · temperature=0 保证输出确定性
+    · RNA（罗马数字级数）→ ChordSymbol 转换：
+      支持升降号前缀、大小写区分大小和弦、多种质量后缀（7, maj7, dim, aug 等）
+    · 输出解析：正则匹配 "小节号: 和弦1 和弦2" 格式
+
+  - harmonize-pipeline.ts：端到端和声分析管线
+    · 完整流程：MusicXML 解析 → 调性分析 → 特征提取 → 分块处理（每 4 小节）
+    · 每块：RAG 检索（对应的 2 小节查询）→ LLM 生成 → 写入 Score
+    · 统计信息：总小节数、API 调用次数、处理耗时
+
+3.6 输出转换器（src/converter/）
+
+  - ir-to-musicxml.ts：和弦注入 MusicXML
+    · 将 Score 中的 ChordSymbol 转为 MusicXML <harmony> 元素
+    · 使用正则匹配在原始 XML 的对应小节、对应拍位置的 <note> 前插入
+    · 自动检测缩进风格和换行符风格
+    · ChordQuality → MusicXML <kind> 映射（11 种）
+
+  - ir-to-abc.ts：ABC Notation 导出
+    · 将 Score 转为 ABC Notation 格式文本
+    · 包含头部字段：标题、拍号、调号
+    · 音符转换：音名 + 八度标记（大小写 + 撇号/逗号）+ 时值后缀
+    · 附点音符：精确分数时值计算
+    · 和弦标注：双引号括起的和弦符号
+    · 休止符支持
+
+3.7 Web 前端（web/）
+
+  - index.html：单页应用，约 1400 行，无框架依赖
+    · 中国风设计：宋体字族、古纸色调、装饰性音符分隔线
+    · 控制栏：上传按钮、加载示例、难度选择（三级）、视图切换、ABC 导出
+    · 文件上传：
+      - 支持 MusicXML 文件（.xml, .musicxml）→ 直接发送到 /api/harmonize
+      - 支持乐谱图片/PDF（.png, .jpg, .pdf 等）→ 发送到 /api/omr/harmonize
+      - 自动根据文件扩展名路由到对应 API
+    · 五线谱渲染：OpenSheetMusicDisplay (OSMD) 1.8.6，支持完整钢琴大谱表
+    · 简谱渲染：Canvas 自绘
+      - 数字音符（1-7）、八度点（上下）、时值下划线
+      - 附点、变音记号、休止符
+      - 和弦标注显示在音符上方
+      - 自动分行排版
+    · 分析面板：调性、置信度、小节数、API 调用次数、处理耗时、和弦进行
+    · ABC 导出弹窗：显示 ABC 文本 + 复制到剪贴板
+    · 内置示例：小星星（Twinkle Twinkle Little Star）12 小节 MusicXML
+    · 加载状态：全屏遮罩 + 旋转动画，OMR 和分析显示不同提示文本
+    · 错误处理：顶部错误横幅，网络错误/服务器错误友好提示
+    · 响应式布局：适配移动端
+
+3.8 后端服务器（server/）
+
+  - index.ts：Express 服务器
+    · 端口：4000（可通过 PORT 环境变量配置）
+    · 静态文件服务：web/ 目录
+    · API 端点：
+      - POST /api/harmonize：MusicXML 文本 → 和声分析结果
+        输入：{ musicxml: string, difficulty: string }
+        输出：{ score, musicxml（带和弦）, analysis }
+      - POST /api/export/abc：Score → ABC Notation
+        输入：{ score: Score }
+        输出：{ abc: string }
+      - POST /api/omr：乐谱图片/PDF → MusicXML（仅 OMR 识别）
+        输入：multipart/form-data（file 字段）
+        输出：{ musicxml: string }
+      - POST /api/omr/harmonize：乐谱图片/PDF → OMR → 和声分析（一站式）
+        输入：multipart/form-data（file 字段）+ difficulty 参数
+        输出：与 /api/harmonize 相同
+    · 文件上传：multer 内存存储，限制 20MB
+    · 环境变量：DASHSCOPE_API_KEY（必需）、AUDIVERIS_PATH（可选）、PORT（可选）
+
+
+四、数据资产
+────────────────────────────────────────────────────────────────────────────────
+
+  - data/hooktheory_phrases.json：Hooktheory 数据集预处理后的片段数据
+    · 来源：Hooktheory 数据库（26,175 首歌曲）
+    · 内容：歌曲 ID、艺术家、歌名、调式、和弦序列（RNA）、旋律音程序列
+
+  - data/phrase_embeddings.json：预计算的片段 embedding 缓存
+    · 使用 text-embedding-v4 模型对所有片段文本描述进行向量化
+    · 避免检索时重复调用 embedding API，大幅降低延迟和成本
+
+  - data/hooktheory_rna.json：Hooktheory 原始数据转 RNA 格式
+
+  - data/chord_transitions.json：和弦转移概率矩阵（从数据集统计）
+
+
+五、脚本工具（scripts/）
+────────────────────────────────────────────────────────────────────────────────
+
+  - preprocess-hooktheory.py：Hooktheory 原始数据预处理
+    · 将 pitch_class 级别的和弦转为罗马数字级数（RNA）
+    · 按 2 小节切片，提取旋律音程序列
+
+  - precompute-embeddings.ts / .py：批量预计算片段 embedding
+    · 调用 DashScope text-embedding-v4 API
+    · 输出 phrase_embeddings.json 缓存文件
+
+  - inspect-hooktheory.py：Hooktheory 数据检查/调试工具
+
+  - test-omr.ts：OMR 引擎 CLI 测试脚本
+  - test-inject.ts / test-inject2.ts：和弦注入测试脚本
+  - test-pipeline.ts：端到端管线测试脚本
+
+
+六、测试（tests/）
+────────────────────────────────────────────────────────────────────────────────
+
+  测试框架：Vitest
+
+  - musicxml-parser.test.ts：MusicXML 解析器测试（11 个用例）
+    · 元信息解析、调性/拍号/速度解析、音符解析、拍位置计算、错误处理
+
+  - key-analyzer.test.ts：调性分析器测试
+
+  - llm-harmonizer.test.ts：LLM 和弦生成器测试
+    · RNA → ChordSymbol 转换、LLM 输出解析
+
+  - validate-musicxml.test.ts：MusicXML 输出验证测试
+
+  - fixtures/twinkle.xml：测试用 MusicXML 文件（小星星，12 小节）
+
+
+七、外部依赖
+────────────────────────────────────────────────────────────────────────────────
+
+  运行时依赖：
+  - express (v5)：Web 服务器框架
+  - multer (v2)：文件上传中间件
+  - fast-xml-parser：MusicXML 解析
+  - openai (v6)：DashScope API 客户端（兼容 OpenAI SDK）
+  - sharp：图片预处理（放大、DPI 设置）
+  - dotenv：环境变量加载
+  - tsx：TypeScript 直接运行
+
+  前端依赖（CDN）：
+  - OpenSheetMusicDisplay (OSMD) 1.8.6：五线谱渲染
+
+  外部服务：
+  - 阿里云 DashScope API：
+    · Qwen-plus 模型（和弦生成）
+    · text-embedding-v4 模型（RAG 向量检索）
+  - Audiveris 5.9.0：本地安装的 OMR 引擎（Java 应用）
+
+  开发依赖：
+  - TypeScript 5.7、Vitest 2.1、tsup（打包）、fast-check（属性测试）
+
+
+八、环境配置
+────────────────────────────────────────────────────────────────────────────────
+
+  必需：
+  - Node.js 18+
+  - .env.local 文件中配置 DASHSCOPE_API_KEY（阿里云百炼大模型 API 密钥）
+
+  可选：
+  - Audiveris 5.9.0（OMR 功能需要，Windows 可通过 winget install Audiveris 安装）
+  - AUDIVERIS_PATH 环境变量（如果 Audiveris 不在默认路径）
+
+  启动命令：
+  - npm run start:server    # 生产模式启动
+  - npm run dev             # 开发模式（热重载）
+  - npm test                # 运行测试
+
+  访问地址：http://localhost:4000
+
+
+九、项目结构
+────────────────────────────────────────────────────────────────────────────────
+
+  harmony-engine/
+  ├── server/
+  │   └── index.ts              # Express 服务器入口
+  ├── src/
+  │   ├── core/
+  │   │   ├── types.ts          # IR 数据模型定义
+  │   │   └── constants.ts      # 乐理常量
+  │   ├── parser/
+  │   │   └── musicxml-parser.ts # MusicXML → IR 解析器
+  │   ├── analyzer/
+  │   │   └── key-analyzer.ts   # 调性分析器（规则 + KS 算法）
+  │   ├── harmonizer/
+  │   │   ├── melody-features.ts # 旋律特征提取
+  │   │   ├── rag-retriever.ts  # RAG 向量检索器
+  │   │   ├── llm-harmonizer.ts # LLM 和弦生成器
+  │   │   └── harmonize-pipeline.ts # 端到端管线
+  │   ├── converter/
+  │   │   ├── ir-to-musicxml.ts # 和弦注入 MusicXML
+  │   │   └── ir-to-abc.ts     # ABC Notation 导出
+  │   ├── omr/
+  │   │   ├── audiveris-omr.ts  # Audiveris OMR 集成
+  │   │   └── mxl-unzip.ts     # MXL 解压器
+  │   └── index.ts              # 公共 API 入口
+  ├── web/
+  │   └── index.html            # 前端单页应用
+  ├── data/
+  │   ├── hooktheory_phrases.json
+  │   ├── phrase_embeddings.json
+  │   ├── hooktheory_rna.json
+  │   └── chord_transitions.json
+  ├── scripts/                  # 数据预处理和测试脚本
+  ├── tests/                    # Vitest 测试用例
+  ├── test_img/                 # OMR 测试图片
+  ├── package.json
+  └── tsconfig.json
+
+
+十、当前状态与已知限制
+────────────────────────────────────────────────────────────────────────────────
+
+  已完成功能：
+  - 完整的 MusicXML 解析 → 调性分析 → RAG+LLM 和声分析 → 输出渲染流程
+  - OMR 乐谱图片识别（Audiveris）集成，前后端打通
+  - 五线谱（OSMD）和简谱（Canvas）双视图渲染
+  - ABC Notation 导出
+  - 三级难度和弦配置
+  - Web 前端完整交互
+
+  已知限制：
+  - 多声部处理：解析时只取第一个 part（右手/主旋律），左手伴奏不参与分析
+  - 简谱渲染和 ABC 导出为单声部输出
+  - OMR 依赖本地安装的 Audiveris，不支持云端部署
+  - 和弦编辑功能尚未实现（用户无法手动修正生成的和弦）
+  - 无用户认证和多用户支持
+
+================================================================================
