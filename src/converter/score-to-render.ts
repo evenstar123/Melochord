@@ -56,6 +56,8 @@ export async function musicxmlToSVGPages(
     pageWidth: o.pageWidth * 10,
     pageHeight: o.pageHeight * 10,
     adjustPageHeight: true,
+    // 不嵌入 WOFF2 字体（librsvg 不支持），改用系统安装的 Leipzig 字体
+    smuflTextFont: 'none',
   });
 
   tk.loadData(musicxml);
@@ -81,9 +83,13 @@ export async function musicxmlToSVG(
 
 /**
  * 单个 SVG 字符串 → PNG Buffer
+ * - flatten 白色背景（避免透明底）
  */
 async function svgToPNG(svg: string): Promise<Buffer> {
-  return sharp(Buffer.from(svg)).png().toBuffer();
+  return sharp(Buffer.from(svg))
+    .flatten({ background: '#ffffff' })
+    .png()
+    .toBuffer();
 }
 
 /**
